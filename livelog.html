@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+ <meta charset="UTF-8">
+ <title>ajax.html</title>
+ <script type = "text/javascript"
+   src = "jquery-3.7.1.min.js"></script>
+ <script type = "text/javascript">
+ $(document).ready(getAJAX);
+ function getAJAX(){
+  $("#output").load("https://oh0.duckdns.org/pgrest/grafana_wsjtx_text?limit=10");
+ }
+ </script>
+ </head>
+ <body>
+ <div id = "output"></div>
+ </body>
+</html>
