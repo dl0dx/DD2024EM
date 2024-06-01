@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en-US"><head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+    <title>Upload a Log File</title>
+    <style>
+      div {
+        margin-bottom: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <div>
+      <form>
+	<label for="file">Choose log file to upload</label>
+	<input type="file" id="inputLogFile" name="file" multiple="">
+      </form>
+    </div>
+
+    <div hidden="hidden" id="fileInfo">
+      File Name: <div id="fileName"></div>
+      File Size: <div id="fileSize"></div>
+      <p>Log File Format</p>
+      <input type="radio" name="logFileFormat" value="ADI" id="inADI">
+      <label for="inADI">ADI</label>
+      <input type="radio" name="logFileFormat" value="ADX" id="inADX">
+      <label for="inADX">ADX</label>
+      <input type="radio" name="logFileFormat" value="JSON" id="inJSON">
+      <label for="inJSON">JSON</label>
+      <input type="radio" name="logFileFormat" value="CSV" id="inCSV">
+      <label for="inCSV">CSV</label>
+      <input type="radio" name="logFileFormat" value="TSV" id="inTSV">
+      <label for="inTSV">TSV</label>
+      <input type="radio" name="logFileFormat" value="Cabrillo" id="inCabrillo">
+      <label for="inCabrillo">Cabrillo</label>
+      <p>
+      <button id="check" type="button" name="checkLogs">Check Logs</button>
+      </p>
+    </div>
+
+    <div hidden="hidden" id="logInfo">
+      <p>Logfile Parser:</p>
+      <div id="LogLength"></div>
+      <div id="logLines"></div>
+      <button id="upload" type="button" name="uploadLogs">Upload Logs</button>
+    </div>
+
+    <div hidden="hidden" id="uploadInfo">
+    </div>
+
+    <script>
+      document.getElementById('inputLogFile').addEventListener('change', selectFile);
+      function selectFile (event) {
+	  var file = event.target.files[0];
+	  hide('logInfo');
+	  document.getElementById('fileName').innerHTML = file.name;
+	  document.getElementById('fileSize').innerHTML = file.size;
+	  setFileType(file.name.split('.').pop());
+	  unHide('fileInfo');
+	  var logData = new FormData(document.querySelector('form'));
+          document.getElementById('check').addEventListener(
+	      "click",
+	      (function (event) { checkLogs(logData); })
+	  );
+      };
+
+      function callAdifmt(format, logData) {
+	  const queryParams = { in: format, out: 'JSON' };
+	  const queryString = new URLSearchParams(queryParams).toString();
+	  const apiUrl = 'https://dx.darc-r01.de/adif-multitool';
+	  const fullUrl = `${apiUrl}?${queryString}`;
+	  const fetchOptions = {
+	      method: 'post',
+	      body: logData
+	  };
+	  return (
+	      fetch(fullUrl, fetchOptions)
+		  .then(response => {
+		      if (!response.ok) { throw new Error('Network response was not OK'); }
+		      return response.json();
+		  })
+	  );
+      };
+
+      function checkLogs(logData) {
+	  hide('fileInfo');
+          callAdifmt(
+	      document.querySelector('input[type=radio][name=logFileFormat]:checked').value,
+	      logData
+	  )
+	      .then(data => {
+                  document.getElementById('logLines').innerHTML = `
+                       <p>Number of log entries: ${data.RECORDS.length}</p>
+                  `;
+                  document.getElementById('logLines').innerHTML = `
+                       <p>First log entry: ${prettyLog(data.RECORDS[0])}</p>
+                       <p>Last  log entry: ${prettyLog(data.RECORDS.slice(-1)[0])}</p>
+                   `;
+		  document.getElementById('upload').addEventListener(
+		      'click',
+		      (function (event) { uploadLogs(data); })
+		  );
+		  unHide('logInfo');
+	      })
+      };
+
+      function uploadLogs(jsonLogs) {
+	  hide('logInfo');
+	  const data = { "json_logs" : jsonLogs };
+          console.log( data );
+	  const fetchOptions = {
+	      method: 'post',
+	      headers: new Headers({'content-type': 'application/json'}),
+	      body: JSON.stringify(data)
+	  };
+	  fetch ('https://dx.darc-r01.de/pgrest/rpc/upload_logdata', fetchOptions)
+	      .then(response => {
+		  if (!response.ok) { throw new Error('Log Upload Failed !'); }
+		  return response.json();
+	      })
+      };
+
+      function prettyLog(l) { return JSON.stringify(l, null, 2); };
+      function hide (e) { document.getElementById(e).setAttribute("hidden","hidden"); };
+      function unHide (e) { document.getElementById(e).removeAttribute("hidden"); };
+
+      function setFileType (suf) {
+        const m = {
+	  adi: 'inADI',
+	  adif: 'inADI',	      
+	  adx: 'inADX',
+	  json: 'inJSON',
+	  jsn:  'inJSON',	      
+	  csv: 'inCSV',
+	  tsv: 'inTSV',
+	  cabrillo: 'inCabrillo',
+	  cbr: 'inCabrillo'
+	};
+	if (suf in m) {document.getElementById(m[suf]).checked = true; };
+      };
+    </script>
+</body></html>
