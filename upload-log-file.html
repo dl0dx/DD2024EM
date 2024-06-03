@@ -157,7 +157,7 @@
 	  fetch ('https://dx.darc-r01.de/pgrest/rpc/upload_logdata', fetchOptions)
 	      .then(response => {
 		  if (!response.ok) { setPageStatus('Logfile Upload Failed'); }
-                  setPageStatus('Logfile Upload: SUCCESS !');  }
+                  setPageStatus('Logfile Upload: SUCCESS !');
 		  return response.json();
 	      })
       };
