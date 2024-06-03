@@ -14,6 +14,9 @@
 	<label for="file">Choose log file to upload</label>
 	<input type="file" id="inputLogFile" name="file" multiple="">
       </form>
+      <p>
+	Supported File Formats: ADIF, ADX, JSON, Cabrillo.
+      </p>
     </div>
 
     <div hidden="hidden" id="fileInfo">
@@ -26,10 +29,6 @@
       <label for="inADX">ADX</label>
       <input type="radio" name="logFileFormat" value="JSON" id="inJSON">
       <label for="inJSON">JSON</label>
-      <input type="radio" name="logFileFormat" value="CSV" id="inCSV">
-      <label for="inCSV">CSV</label>
-      <input type="radio" name="logFileFormat" value="TSV" id="inTSV">
-      <label for="inTSV">TSV</label>
       <input type="radio" name="logFileFormat" value="Cabrillo" id="inCabrillo">
       <label for="inCabrillo">Cabrillo</label>
       <p>
@@ -39,7 +38,7 @@
 
     <div hidden="hidden" id="logInfo">
       <p>Logfile Parser:</p>
-      <div id="LogLength"></div>
+      <div id="logLength"></div>
       <div id="logLines"></div>
       <button id="upload" type="button" name="uploadLogs">Upload Logs</button>
     </div>
@@ -48,7 +47,19 @@
     </div>
 
     <script>
+      // Initialize the event handler checkLogsEvent to an function that just returns.
+      var checkLogsEvent = function (event) { };
+      var uploadLogsEvent = function (event) { };
       document.getElementById('inputLogFile').addEventListener('change', selectFile);
+      document.getElementById('check').addEventListener(
+	  "click",
+	  function (event) { checkLogsEvent (event); }
+      );
+      document.getElementById('upload').addEventListener(
+	  'click',
+	  function (event) { uploadLogsEvent(event); }
+      );
+
       function selectFile (event) {
 	  var file = event.target.files[0];
 	  hide('logInfo');
@@ -56,21 +67,30 @@
 	  document.getElementById('fileSize').innerHTML = file.size;
 	  setFileType(file.name.split('.').pop());
 	  unHide('fileInfo');
-	  var logData = new FormData(document.querySelector('form'));
-          document.getElementById('check').addEventListener(
-	      "click",
-	      (function (event) { checkLogs(logData); })
-	  );
+          reader = new FileReader();
+	  reader.readAsArrayBuffer(file);
+	  reader.onload = function() {
+	      console.log(reader.result);
+	      var uploadData = {
+		  "arrayBuffer" : reader.result,
+		  "file_name" : file.name,
+//		  "file_size" : file.size,
+	      };
+              checkLogsEvent = function (event) { checkLogs(uploadData); };
+          };
+	  reader.onerror = function() {
+	      console.log(reader.error);
+	  };
       };
 
-      function callAdifmt(format, logData) {
+      function callAdifmt(format, arrayBuffer) {
 	  const queryParams = { in: format, out: 'JSON' };
 	  const queryString = new URLSearchParams(queryParams).toString();
 	  const apiUrl = 'https://dx.darc-r01.de/adif-multitool';
 	  const fullUrl = `${apiUrl}?${queryString}`;
 	  const fetchOptions = {
 	      method: 'post',
-	      body: logData
+	      body: arrayBuffer
 	  };
 	  return (
 	      fetch(fullUrl, fetchOptions)
@@ -81,36 +101,40 @@
 	  );
       };
 
-      function checkLogs(logData) {
+      function checkLogs(uploadData) {
 	  hide('fileInfo');
           callAdifmt(
 	      document.querySelector('input[type=radio][name=logFileFormat]:checked').value,
-	      logData
+	      uploadData.arrayBuffer
 	  )
 	      .then(data => {
-                  document.getElementById('logLines').innerHTML = `
+                  document.getElementById('logLength').innerHTML = `
                        <p>Number of log entries: ${data.RECORDS.length}</p>
                   `;
                   document.getElementById('logLines').innerHTML = `
                        <p>First log entry: ${prettyLog(data.RECORDS[0])}</p>
                        <p>Last  log entry: ${prettyLog(data.RECORDS.slice(-1)[0])}</p>
                    `;
-		  document.getElementById('upload').addEventListener(
-		      'click',
-		      (function (event) { uploadLogs(data); })
-		  );
+		  uploadData["json_logs"] = data;
+                  uploadLogsEvent = function (event) { uploadLogs(uploadData); };
 		  unHide('logInfo');
 	      })
       };
 
-      function uploadLogs(jsonLogs) {
+      function uploadLogs(uploadData) {
 	  hide('logInfo');
-	  const data = { "json_logs" : jsonLogs };
-          console.log( data );
+// TODO: storing the original file together with the json decoding in postgrest is tricky
+// need to do base64 encode to put it in json and decode it on receiving !
+//	  var enc = new TextDecoder("utf-8");
+//	  uploadData["file_content"] = enc.decode(uploadData["arrayBuffer"]);
+	  delete uploadData.arrayBuffer;
 	  const fetchOptions = {
 	      method: 'post',
-	      headers: new Headers({'content-type': 'application/json'}),
-	      body: JSON.stringify(data)
+	      headers: new Headers({
+		    'content-type': 'application/json'
+		  , 'Authorization': 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpYXQiOjE3MTczNjg3MDksInJvbGUiOiJoYW1sb2d1cGxvYWQiLCJ1c2VyIjoidGVzdHVzZXIifQ.A7GhnH7IU0iMNq6upJClUX3CXgWEJEfciSQ_w0-aNxw'
+	          }),
+	      body: JSON.stringify(uploadData)
 	  };
 	  fetch ('https://dx.darc-r01.de/pgrest/rpc/upload_logdata', fetchOptions)
 	      .then(response => {
@@ -130,10 +154,8 @@
 	  adx: 'inADX',
 	  json: 'inJSON',
 	  jsn:  'inJSON',	      
-	  csv: 'inCSV',
-	  tsv: 'inTSV',
 	  cabrillo: 'inCabrillo',
-	  cbr: 'inCabrillo'
+	  log: 'inCabrillo'
 	};
 	if (suf in m) {document.getElementById(m[suf]).checked = true; };
       };
