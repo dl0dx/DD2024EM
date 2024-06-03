@@ -32,7 +32,7 @@
       <input type="radio" name="logFileFormat" value="Cabrillo" id="inCabrillo">
       <label for="inCabrillo">Cabrillo</label>
       <p>
-      <button id="check" type="button" name="checkLogs">Check Logs</button>
+      <button id="check" type="button" name="checkLogs" onclick="checkLogs()" >Check Logs</button>
       </p>
     </div>
 
@@ -40,47 +40,44 @@
       <p>Logfile Parser:</p>
       <div id="logLength"></div>
       <div id="logLines"></div>
-      <button id="upload" type="button" name="uploadLogs">Upload Logs</button>
+      <button id="upload" type="button" name="uploadLogs" onclick="uploadLogs()" >Upload Logs</button>
     </div>
 
-    <div hidden="hidden" id="uploadInfo">
-    </div>
+    <div hidden="hidden" id="uploadInfo"> </div>
+    <div id="pageStatus">test</div>
 
     <script>
-      // Initialize the event handler checkLogsEvent to an function that just returns.
-      var checkLogsEvent = function (event) { };
-      var uploadLogsEvent = function (event) { };
+      var state = {};
       document.getElementById('inputLogFile').addEventListener('change', selectFile);
-      document.getElementById('check').addEventListener(
-	  "click",
-	  function (event) { checkLogsEvent (event); }
-      );
-      document.getElementById('upload').addEventListener(
-	  'click',
-	  function (event) { uploadLogsEvent(event); }
-      );
-
+      setPageStatus('Please choose a file.');
       function selectFile (event) {
 	  var file = event.target.files[0];
 	  hide('logInfo');
+	  state.file_name = file.name;
+	  state.file_size = file.size;
 	  document.getElementById('fileName').innerHTML = file.name;
 	  document.getElementById('fileSize').innerHTML = file.size;
+
 	  setFileType(file.name.split('.').pop());
 	  unHide('fileInfo');
           reader = new FileReader();
 	  reader.readAsArrayBuffer(file);
 	  reader.onload = function() {
-	      console.log(reader.result);
-	      var uploadData = {
-		  "arrayBuffer" : reader.result,
-		  "file_name" : file.name,
-//		  "file_size" : file.size,
-	      };
-              checkLogsEvent = function (event) { checkLogs(uploadData); };
+	      setPageStatus('Checking Logfile.');
+              state.arrayBuffer = reader.result;
           };
 	  reader.onerror = function() {
 	      console.log(reader.error);
 	  };
+          b64 = new FileReader();
+	  b64.readAsDataURL(file);
+	  b64.onload = function() {
+              state.file_base64 = b64.result;
+          };
+	  b64.onerror = function() {
+	      console.log(b64.error);
+	  };
+
       };
 
       function callAdifmt(format, arrayBuffer) {
@@ -95,17 +92,21 @@
 	  return (
 	      fetch(fullUrl, fetchOptions)
 		  .then(response => {
-		      if (!response.ok) { throw new Error('Network response was not OK'); }
+		      if (!response.ok) {
+			  throw new Error('Network response was not OK');
+			  setPageStatus('Error while checking logfile.');
+		      }
 		      return response.json();
 		  })
 	  );
       };
 
-      function checkLogs(uploadData) {
+      function checkLogs() {
 	  hide('fileInfo');
+	  setPageStatus('');
           callAdifmt(
 	      document.querySelector('input[type=radio][name=logFileFormat]:checked').value,
-	      uploadData.arrayBuffer
+	      state.arrayBuffer
 	  )
 	      .then(data => {
                   document.getElementById('logLength').innerHTML = `
@@ -115,18 +116,19 @@
                        <p>First log entry: ${prettyLog(data.RECORDS[0])}</p>
                        <p>Last  log entry: ${prettyLog(data.RECORDS.slice(-1)[0])}</p>
                    `;
-		  uploadData["json_logs"] = data;
-                  uploadLogsEvent = function (event) { uploadLogs(uploadData); };
+		  state.json_logs = data;
+		  setPageStatus('Converting logs to JSON: SUCCESS');
 		  unHide('logInfo');
 	      })
       };
 
-      function uploadLogs(uploadData) {
+      function uploadLogs() {
 	  hide('logInfo');
-// TODO: storing the original file together with the json decoding in postgrest is tricky
-// need to do base64 encode to put it in json and decode it on receiving !
-//	  var enc = new TextDecoder("utf-8");
-//	  uploadData["file_content"] = enc.decode(uploadData["arrayBuffer"]);
+          const uploadData = {
+	      file_content_url_encoded :  state.file_base64,
+	      file_name : state.file_name,
+              json_logs : state.json_logs
+	  };
 	  delete uploadData.arrayBuffer;
 	  const fetchOptions = {
 	      method: 'post',
@@ -138,7 +140,7 @@
 	  };
 	  fetch ('https://dx.darc-r01.de/pgrest/rpc/upload_logdata', fetchOptions)
 	      .then(response => {
-		  if (!response.ok) { throw new Error('Log Upload Failed !'); }
+		  if (!response.ok) { setPageStatus('Logfile Upload Failed');  }
 		  return response.json();
 	      })
       };
@@ -158,6 +160,9 @@
 	  log: 'inCabrillo'
 	};
 	if (suf in m) {document.getElementById(m[suf]).checked = true; };
+      };
+      function setPageStatus (html) {
+	  document.getElementById('pageStatus').innerHTML = html;
       };
     </script>
 </body></html>
