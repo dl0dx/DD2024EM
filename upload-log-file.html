@@ -40,11 +40,19 @@
       <p>Logfile Parser:</p>
       <div id="logLength"></div>
       <div id="logLines"></div>
+      <div>
+	<input name="Operator" type="text" maxlength="30" id="operator_overwrite"/>
+	<label for="operator_overwrite">Operator Name</label>
+      </div>
+      <div>
+        <input name="AccessToken" type="text" maxlength="500" id="access_token"/>
+	<label for="access_token">Personal Access Token (If you have one.)</label>
+      </div>
       <button id="upload" type="button" name="uploadLogs" onclick="uploadLogs()" >Upload Logs</button>
     </div>
 
     <div hidden="hidden" id="uploadInfo"> </div>
-    <div id="pageStatus">test</div>
+    <div id="pageStatus"></div>
 
     <script>
       var state = {};
@@ -123,24 +131,33 @@
       };
 
       function uploadLogs() {
+	  var operator = document.getElementById("operator_overwrite").value;
+	  if (! operator || operator == 'DD2024EM') {
+            setPageStatus('Please enter the name of the  operator. (DD2024EM is not allowed.)');
+            return;
+          };
 	  hide('logInfo');
           const uploadData = {
 	      file_content_url_encoded :  state.file_base64,
 	      file_name : state.file_name,
-              json_logs : state.json_logs
+              json_logs : state.json_logs,
+	      station   : 'DD2024EM',
+	      operator  : operator
 	  };
 	  delete uploadData.arrayBuffer;
 	  const fetchOptions = {
 	      method: 'post',
 	      headers: new Headers({
-		    'content-type': 'application/json'
-		  , 'Authorization': 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpYXQiOjE3MTczNjg3MDksInJvbGUiOiJoYW1sb2d1cGxvYWQiLCJ1c2VyIjoidGVzdHVzZXIifQ.A7GhnH7IU0iMNq6upJClUX3CXgWEJEfciSQ_w0-aNxw'
+		  'content-type': 'application/json',
+		  'Prefer' : 'params=single-object',
+		  'Authorization': 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpYXQiOjE3MTczNjg3MDksInJvbGUiOiJoYW1sb2d1cGxvYWQiLCJ1c2VyIjoidGVzdHVzZXIifQ.A7GhnH7IU0iMNq6upJClUX3CXgWEJEfciSQ_w0-aNxw'
 	          }),
 	      body: JSON.stringify(uploadData)
 	  };
 	  fetch ('https://dx.darc-r01.de/pgrest/rpc/upload_logdata', fetchOptions)
 	      .then(response => {
-		  if (!response.ok) { setPageStatus('Logfile Upload Failed');  }
+		  if (!response.ok) { setPageStatus('Logfile Upload Failed'); }
+                  setPageStatus('Logfile Upload: SUCCESS !');  }
 		  return response.json();
 	      })
       };
